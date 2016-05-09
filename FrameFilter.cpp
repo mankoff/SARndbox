@@ -29,6 +29,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Geometry/Matrix.h>
 #include <Geometry/ProjectiveTransformation.h>
 
+#include <stdio.h>
+#include <time.h>
+time_t usage_time;
+float usage_thresh;
+FILE *log_file;
+
+
 /****************************
 Methods of class FrameFilter:
 ****************************/
@@ -66,6 +73,7 @@ void* FrameFilter::filterThreadMethod(void)
 		float* ofPtr=validBuffer; // static_cast<const float*>(outputFrame.getBuffer());
 		float* nofPtr=static_cast<float*>(newOutputFrame.getBuffer());
 		const PixelDepthCorrection* pdcPtr=pixelDepthCorrection;
+		usage_thresh = 9999;
 		for(unsigned int y=0;y<size[1];++y)
 			{
 			float py=float(y)+0.5f;
@@ -78,6 +86,14 @@ void* FrameFilter::filterThreadMethod(void)
 				
 				/* Depth-correct the new value: */
 				float newCVal=pdcPtr->correct(newVal);
+
+				if (( x > 64 ) &&
+				    ( x < 640-64 ) &&
+				    ( y > 48 ) &&
+				    ( y < 480-48 )) {
+				  if (newCVal < usage_thresh)
+				    usage_thresh = newCVal;
+				}
 				
 				/* Plug the depth-corrected new value into the minimum and maximum plane equations to determine its validity: */
 				float minD=minPlane[0]*px+minPlane[1]*py+minPlane[2]*newCVal+minPlane[3];
@@ -142,6 +158,19 @@ void* FrameFilter::filterThreadMethod(void)
 					}
 				}
 			}
+
+		if (usage_thresh < 600) {
+		  // Something is present. Record the timestamp
+		  // if we haven't done so recently
+		  time_t now = time(0);
+		  if (now > (usage_time+60)) {
+		    usage_time = now;
+		    // write to file
+		    log_file = fopen("/home/sandbox/Desktop/log.log", "a");
+		    fprintf(log_file, "%d\n", (int)now);
+		    fclose(log_file);
+		  }
+		}
 		
 		/* Go to the next averaging slot: */
 		if(++averagingSlotIndex==numAveragingSlots)
